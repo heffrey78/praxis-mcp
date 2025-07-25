@@ -70,7 +70,8 @@ dependencies = [
     "openai-agents>=0.0.17",
     "mlflow>=2.22.0",
     "RestrictedPython>=7.0,<7.4",
-    "watchdog>=4.0.0"
+    "watchdog>=4.0.0",
+    "httpx>=0.25.0,<1.0.0"
 ]
 
 [project.optional-dependencies]
@@ -107,8 +108,8 @@ src-layout = true
 dev = "sh -c 'mkdir -p logs && python -m uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir src 2>&1 | tee logs/backend.log'"
 dev-debug = "sh -c 'mkdir -p logs && python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir src 2>&1 | tee logs/backend.log'"
 praxis = {cmd = "python -c \"import sys; sys.path.insert(0, '.'); from src.cli import app; app()\"", env = {"PYTHONPATH" = "."}}
-mcp = {cmd = "python -m src.mcp", env = {"PYTHONPATH" = "."}}
-mcp-dev = {cmd = "sh -c 'mkdir -p logs && python -m src.mcp --transport sse --host 127.0.0.1 --port 8081 --mount-path /mcp 2>&1 | tee logs/mcp.log'", env = {"PYTHONPATH" = "."}}
+mcp = {cmd = "python -c \"import sys; sys.path.insert(0, '.'); from src.mcp.cli import app; app()\"", env = {"PYTHONPATH" = "."}}
+mcp-dev = {cmd = "sh -c 'mkdir -p logs && python -c \"import sys; sys.path.insert(0, \\\".\\\"); from src.mcp.cli import app; app([\\\"start\\\", \\\"--debug\\\"])\" 2>&1 | tee logs/mcp.log'", env = {"PYTHONPATH" = "."}}
 
 [tool.pdm.build]
 includes = ["src"]
