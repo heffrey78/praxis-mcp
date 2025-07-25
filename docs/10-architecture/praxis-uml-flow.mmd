@@ -1,0 +1,304 @@
+---
+title: Praxis Architecture
+---
+classDiagram
+    direction TB
+
+    %% CLI Components
+    class CLI {
+        +main()
+    }
+
+    class TyerApp {
+        +add_typer(command: Typer)
+    }
+
+    class PipelineCommands {
+        +list_pipelines()
+        +show_pipeline()
+        +run_pipeline()
+        +history()
+        +export_task()
+    }
+
+
+    class PluginCommands {
+        +list_plugins()
+        +plugin_info()
+        +run_plugin()
+    }
+
+    class TaskHistoryCommands {
+        +list_history()
+        +show_task()
+        +clear_history()
+    }
+
+    class PipelineExecutor {
+        +execute(pipeline: PipelineDefinition, params: Dict) : Tuple[bool, str]
+        -_execute_async(pipeline: PipelineDefinition, params: Dict) : None
+        +close() : None
+    }
+
+    %% Core Orchestrator & Execution
+    class PipelineOrchestrator {
+        +run_pipeline(pipeline_id: str, context: PipelineContext) : void
+        +set_progress_callback(callback: Callable) : void
+        -_load_pipeline_definitions(): void
+        -validate_params(def: PipelineDefinition) : void
+    }
+
+    class DAGExecutor {
+        +executeDAG(context: PipelineContext, steps: List~StepConfig~) : void
+        +set_progress_callback(callback: Callable) : void
+        -_get_ready_steps() : List~StepConfig~
+        -_run_with_retries(plugin: PluginBase, context: PipelineContext) : void
+        -_execute_loop(context: PipelineContext, step: StepConfig) : void
+        -_report_progress(step_name: str, status: StepStatus, error: Optional~Exception~) : void
+    }
+
+    class PipelineDefinition {
+        +id: str
+        +name: str
+        +description: str
+        +params: List~ParamDefinition~
+        +steps: List~StepConfig~
+        +to_dict() : Dict
+    }
+
+    class ParamDefinition {
+        +name: str
+        +required: bool
+        +description: str
+        +type: str
+        +default: Optional~Any~
+    }
+
+    class StepConfig {
+        +name: str
+        +plugin: str
+        +depends_on: List~str~
+        +fail_on_error: bool
+        +config: Dict~str, Any~
+        +loop_config: Optional~LoopConfig~
+    }
+
+    class LoopConfig {
+        +body: List~StepConfig~
+        +collection: Optional~str~
+        +item_name: Optional~str~
+        +index_name: Optional~str~
+        +result_name: Optional~str~
+        +count: Optional~int~
+        +condition: Optional~str~
+        +fail_fast: bool
+        +max_iterations: int
+    }
+
+    class StepProgress {
+        +step_name: str
+        +status: StepStatus
+        +error: Optional~Exception~
+        +start_time: Optional~float~
+        +end_time: Optional~float~
+        +step_number: Optional~int~
+        +total_steps: Optional~int~
+        +group_name: Optional~str~
+    }
+
+
+    %% Plugin & Registry
+    class PluginBase {
+        +input: Type~BaseModel~
+        +output: Type~BaseModel~
+        +config: Type~BaseModel~
+        +NAME: str
+        +VERSION: str
+        +DESCRIPTION: str
+        +async run(context: PipelineContext): Any
+        +validate_requirements(context: PipelineContext): void
+    }
+
+    class PluginInputModel {
+        +class Config:
+            +input_types: List~str~
+            +input_descriptions: Dict~str, str~
+    }
+
+    class PluginOutputModel {
+        +class Config:
+            +output_types: List~str~
+            +output_descriptions: Dict~str, str~
+    }
+
+    class PluginConfigModel {
+    }
+
+    class StepRegistry {
+        +register_plugin(name: str, plugin_class: Type~PluginBase~) : void
+        +getPlugin(name: str): PluginBase
+    }
+
+    class PluginDiscovery {
+        +discover_plugins() : Dict~str, Type~PluginBase~~
+    }
+
+    class PluginExecutor {
+        +execute_plugin(name: str, params: Dict, artifacts_dir: str) : Dict
+        +get_plugin_info(name: str) : Dict
+    }
+
+    %% Container & Managers
+    class DependencyContainer {
+        +get_artifact_manager(): ArtifactManager
+        +get_task_manager(): TaskManager
+        +get_step_registry(): StepRegistry
+        +get_pipeline_registry(): PipelineRegistry
+        +get_service_registry(): ServiceRegistry
+        +get_orchestrator(): PipelineOrchestrator
+        +register_instance(cls: Type, instance: Any): void
+        +get_instance(cls: Type): Any
+    }
+
+    class TaskManager {
+        +create_task(pipeline_id: str, params: Dict~str,Any~): str
+        +get_task_dir(task_id: str): Path
+        +find_task_by_params(pipeline_id: str, param_key: str, param_value: str): Optional~str~
+        +get_task_history(): List~Dict~
+        +get_task_details(task_id: str): Optional~Dict~
+        +update_step_progress(task_id: str, step_name: str, status: str): void
+        +clear_history(): int
+    }
+
+    class ArtifactManager {
+        +save_artifact(task_id: str, filename: str, content: Any, subdir: Optional~str~) : Path
+        +read_artifact(task_id: str, filename: str) : Any
+        +artifact_exists(task_id: str, filename: str) : bool
+        +get_task_dir(task_id: str) : Path
+        +write_text(task_id: str, filename: str, content: str) : Path
+        +write_binary(task_id: str, filename: str, content: bytes) : Path
+    }
+
+    class PipelineRegistry {
+        +register(pipeline: PipelineDefinition): void
+        +get(pipeline_id: str): PipelineDefinition
+        +get_all(): Dict~str, PipelineDefinition~
+    }
+
+    %% Service Registry and Providers
+    class ServiceRegistry {
+        +register_provider(provider_id: str, provider_class: Type): void
+        +get_chat_provider(provider_id: Optional~str~): ChatProvider
+        +load_config(config_path: Path): void
+    }
+
+    class ChatProvider {
+        +supported_models: List~str~
+        +async chat(messages: List~Dict~, model: Optional~str~): Dict
+        +async complete(prompt: str, model: Optional~str~): str
+        +async embed(text: str, model: Optional~str~): List~float~
+    }
+
+    class OpenAIProvider {
+        +api_key: str
+        +async chat(messages: List~Dict~, model: str="gpt-4"): Dict
+        +async complete(prompt: str, model: Optional~str~): str
+        +async embed(text: str, model: Optional~str~): List~float~
+        +async transcribe(audio_file_path: str): Dict
+    }
+
+    class AzureOpenAIProvider {
+        +api_key: str
+        +endpoint: str
+        +async chat(messages: List~Dict~, model: Optional~str~): Dict
+    }
+
+    %% Context
+    class PipelineContext {
+        +task_id: str
+        +artifact_manager: ArtifactManager
+        +provider: Optional~ChatProvider~
+        +__getitem__(key: str): Any
+        +__setitem__(key: str, value: Any): void
+        +update(values: Dict): void
+        +copy(): PipelineContext
+        +get_artifact_path(filename: str): Path
+        +save_artifact(filename: str, content: Any) : Path
+        +set_provider(provider: ChatProvider, model: Optional~str~): void
+        +get_provider(): ChatProvider
+        +set_current_step(step_name: str): void
+        +set_container(container: DependencyContainer): void
+    }
+
+    %% Example Plugins
+
+    class ContentSummarizePlugin {
+        +input: SummarizeInput
+        +output: SummarizeOutput
+        +config: SummarizeConfig
+        +async run(context: PipelineContext): void
+    }
+
+    class ContentQAPlugin {
+        +input: QAInput
+        +output: QAOutput
+        +config: QAConfig
+        +async run(context: PipelineContext): void
+    }
+
+    %% Relationships
+    %% CLI Structure
+    CLI --> TyerApp : "creates"
+    TyerApp --> PipelineCommands : "registers"
+    TyerApp --> PluginCommands : "registers"
+    TyerApp --> TaskHistoryCommands : "registers"
+    PipelineCommands --> PipelineExecutor : "uses"
+    PipelineExecutor --> PipelineOrchestrator : "calls asynchronously"
+    PluginCommands --> PluginExecutor : "uses"
+    TaskHistoryCommands --> TaskManager : "uses"
+
+    %% DependencyContainer
+    DependencyContainer --> ArtifactManager : "provides"
+    DependencyContainer --> TaskManager : "provides"
+    DependencyContainer --> StepRegistry : "provides"
+    DependencyContainer --> PipelineRegistry : "provides"
+    DependencyContainer --> ServiceRegistry : "provides"
+    DependencyContainer --> PipelineOrchestrator : "provides"
+
+    %% Orchestrator & DAG
+    PipelineOrchestrator --> DependencyContainer : "uses"
+    PipelineOrchestrator --> DAGExecutor : "delegates DAG execution"
+    DAGExecutor --> StepRegistry : "resolves plugins"
+    DAGExecutor --> StepConfig : "executes steps in dependency order"
+    DAGExecutor --> PluginBase : "calls run(context)"
+    DAGExecutor --> StepProgress : "reports progress"
+
+    %% Pipeline & Steps
+    PipelineOrchestrator --> PipelineDefinition : "loads & validates"
+    PipelineDefinition --> ParamDefinition : "has 0..* params"
+    PipelineDefinition --> StepConfig : "has 1..* steps"
+    StepConfig --> LoopConfig : "may have loop_config"
+
+    %% Plugin Registry & Discovery
+    StepRegistry --> PluginBase : "returns plugin instance"
+    PluginBase <|-- ContentSummarizePlugin
+    PluginDiscovery --> PluginBase : "discovers"
+    PluginBase --> PluginInputModel : "uses as input"
+    PluginBase --> PluginOutputModel : "uses as output"
+    PluginBase --> PluginConfigModel : "uses as config"
+
+    %% PipelineContext & Artifacts
+    PipelineContext --> ArtifactManager : "calls to save/read"
+    PipelineContext --> ChatProvider : "accesses via get_provider()"
+    TaskManager --> ArtifactManager : "writes to"
+    PluginBase ..> PipelineContext : "reads/writes data"
+
+    %% Service Registry & Providers
+    ServiceRegistry --> ChatProvider : "provides"
+    ChatProvider <|-- OpenAIProvider : "implements"
+    ChatProvider <|-- AzureOpenAIProvider : "implements"
+
+    %% LLM Integration
+    AudioTranscribePlugin --> ChatProvider : "uses for transcription"
+    ContentSummarizePlugin --> ChatProvider : "uses for summarizing"
+    ContentQAPlugin --> ChatProvider : "uses for Q&A via context.get_provider()"

@@ -1,0 +1,123 @@
+---
+config:
+    theme: dark
+    themeVariables:
+        primaryColor: "#2A2A2A"
+        primaryBorderColor: "#666"
+        lineColor: "#666"
+        textColor: "#fff"
+---
+flowchart TD
+    %% Main CLI Entry Point
+    CLI[CLI Entry Point<br>src/cli/main.py] --> |Register Subcommands| Subcommands[Typer Subcommands]
+
+    %% Subcommands
+    Subcommands --> Pipeline[pipeline<br>Command Group]
+    Subcommands --> Plugin[plugin<br>Command Group]
+    Subcommands --> TaskHistory[task_history<br>Command Group]
+
+    %% Pipeline Commands
+    Pipeline --> PipelineList[pipeline list]
+    Pipeline --> PipelineShow[pipeline show]
+    Pipeline --> PipelineRun[pipeline run]
+    Pipeline --> PipelineHistory[pipeline history]
+    Pipeline --> PipelineExport[pipeline export]
+
+    %% Interactive Mode
+    Pipeline --> |No arguments| PipelineInteractive[Interactive Pipeline Selection]
+    PipelineInteractive --> |Select Pipeline| PipelinePrompt[Collect Parameters Interactively]
+    PipelinePrompt --> |Execute| Executor[PipelineExecutor]
+
+    %% Pipeline Run Flow
+    PipelineRun --> |Parse Parameters| ParseParams[parse_parameters]
+    ParseParams --> |Validate Parameters| ValidateParams[validate_parameters]
+    ValidateParams --> |Execute Pipeline| Executor
+
+    %% Pipeline Executor
+    Executor --> |Create Thread| AsyncExec[_execute_async]
+    AsyncExec --> |Get Services| Services[Get Core Services]
+    Services --> |Create Task| TaskCreate[Create Task]
+    TaskCreate --> |Create Context| ContextCreate[Create PipelineContext]
+    ContextCreate --> |Configure Provider| SetProvider[Set AI Provider]
+    SetProvider --> |Run Pipeline| RunPipeline[orchestrator.run_pipeline]
+
+    %% Core Services
+    subgraph Core[Core Services]
+        direction TB
+        Container[DependencyContainer]
+        PipelineReg[PipelineRegistry]
+        ArtifactMgr[ArtifactManager]
+        TaskMgr[TaskManager]
+        StepReg[StepRegistry]
+        ServiceReg[ServiceRegistry]
+        Orchestrator[PipelineOrchestrator]
+
+        Container --> |Get Pipeline Registry| PipelineReg
+        Container --> |Get Artifact Manager| ArtifactMgr
+        Container --> |Get Task Manager| TaskMgr
+        Container --> |Get Step Registry| StepReg
+        Container --> |Get Service Registry| ServiceReg
+        Container --> |Get Orchestrator| Orchestrator
+    end
+
+    %% Execution Flow
+    subgraph Exec[Execution]
+        direction TB
+        DAG[DAGExecutor]
+        ReadySteps[_get_ready_steps]
+        RunWithRetries[_run_with_retries]
+        Plugin[Plugin Execution]
+        LoopExecution[_execute_loop]
+
+        DAG --> |Get Next Steps| ReadySteps
+        ReadySteps --> |Execute with Retries| RunWithRetries
+        ReadySteps --> |Handle Loop Steps| LoopExecution
+        RunWithRetries --> |Run Plugin| Plugin
+        LoopExecution --> |Execute Loop Body| DAG
+    end
+
+    %% Plugin Execution
+    subgraph PluginExec[Plugin Execution]
+        direction TB
+        PluginExecutor[PluginExecutor]
+        PluginDiscovery[PluginDiscovery]
+
+        Plugin[plugin command] --> |Execute Plugin| PluginExecutor
+        PluginExecutor --> |Discover Plugins| PluginDiscovery
+        PluginDiscovery --> |Run Plugin| ExecutePlugin[execute_plugin]
+    end
+
+    %% Task History
+    subgraph History[Task History Management]
+        direction TB
+        ListHistory[list_history]
+        ShowTask[show_task]
+        ClearHistory[clear_history]
+
+        TaskHistory --> ListHistory
+        TaskHistory --> ShowTask
+        TaskHistory --> ClearHistory
+    end
+
+    %% Progress Reporting
+    subgraph Progress[Progress Reporting]
+        direction TB
+        ReportProgress[_report_progress]
+        PrintProgress[print_step_progress]
+        UpdateTaskProgress[update_step_progress]
+
+        ReportProgress --> |Update CLI| PrintProgress
+        ReportProgress --> |Update Task Status| UpdateTaskProgress
+    end
+
+    %% Connect Main Components
+    RunPipeline --> |Execute DAG| DAG
+    Plugin --> |Save Artifacts| ArtifactMgr
+    RunWithRetries --> |Report Status| ReportProgress
+    PipelineRun -.-> |Uses| Container
+
+    %% Style settings
+    classDef default fill:#2A2A2A,stroke:#666,stroke-width:2px,color:#FFF;
+    classDef highlight fill:#3a6186,stroke:#666,stroke-width:2px,color:#FFF;
+
+    class Executor,DAG,PipelineBuilder,PluginExecutor highlight;
